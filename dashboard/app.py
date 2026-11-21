@@ -47,9 +47,9 @@ def render_overview(customers: pd.DataFrame, tier_summary: pd.DataFrame) -> None
     st.header("Portfolio overview")
     cards = st.columns(4)
     cards[0].metric("Total customers", f"{len(customers):,}")
-    cards[1].metric("Observed churn", f"{customers['churn_flag'].mean() * 100:.2f}%")
+    cards[1].metric("Observed churn", f"{customers['churn_flag'].mean() * 100:.1f}%")
     cards[2].metric("Average tenure", f"{customers['tenure'].mean():.1f} months")
-    cards[3].metric("Average monthly charges", f"${customers['MonthlyCharges'].mean():,.2f}")
+    cards[3].metric("Average monthly charges", f"${customers['MonthlyCharges'].mean():,.1f}")
     left, right = st.columns(2)
     with left:
         churn = customers.groupby("Churn", as_index=False).size().rename(columns={"size": "customers"})
@@ -59,7 +59,21 @@ def render_overview(customers: pd.DataFrame, tier_summary: pd.DataFrame) -> None
         figure = px.bar(tier_summary, x="risk_tier", y="customers", color="risk_tier", title="Customers per Risk Tier", labels={"customers": "Customers", "risk_tier": "Risk tier"}, color_discrete_map=TIER_COLORS, category_orders={"risk_tier": ["Low", "Medium", "High"]})
         st.plotly_chart(figure, width="stretch")
     st.caption("Risk score is produced by a class-weighted model and ranks customers for review; it is not a calibrated probability.")
-    st.dataframe(tier_summary, width="stretch", hide_index=True)
+    tier_display = tier_summary.rename(columns={
+        "risk_tier": "Risk tier",
+        "customers": "Customers",
+        "actual_churn_rate": "Actual churn rate (%)",
+        "average_tenure": "Avg tenure (months)",
+        "average_monthly_charges": "Avg monthly charges ($)",
+        "common_contract": "Most common contract",
+        "common_internet_service": "Most common internet service",
+        "common_payment_method": "Most common payment method",
+    }).copy()
+    tier_display["Customers"] = tier_display["Customers"].astype(int)
+    tier_display["Actual churn rate (%)"] = tier_display["Actual churn rate (%)"].round(1)
+    tier_display["Avg tenure (months)"] = tier_display["Avg tenure (months)"].round(1)
+    tier_display["Avg monthly charges ($)"] = tier_display["Avg monthly charges ($)"].round(1)
+    st.dataframe(tier_display, width="stretch", hide_index=True)
     st.caption("Privacy note: this dashboard shows customer IDs from a public demonstration dataset only.")
 
 
@@ -78,7 +92,10 @@ def render_churn_analysis(customers: pd.DataFrame) -> None:
         for cell, column in zip(cells, dimensions[start : start + 2]):
             rates = filtered.groupby(column, observed=False)["churn_flag"].agg(customers="size", churn_rate="mean").reset_index()
             rates["churn_rate"] *= 100
-            figure = px.bar(rates, x=column, y="churn_rate", title=f"Churn Rate by {column}", labels={"churn_rate": "Churn rate (%)", column: column}, text_auto=".1f")
+            display_rates = rates.rename(columns={"customers": "Customers", "churn_rate": "Churn rate (%)"}).copy()
+            display_rates["Customers"] = display_rates["Customers"].astype(int)
+            display_rates["Churn rate (%)"] = display_rates["Churn rate (%)"].round(1)
+            figure = px.bar(display_rates, x=column, y="Churn rate (%)", title=f"Churn Rate by {column}", labels={"Churn rate (%)": "Churn rate (%)", column: column}, text_auto=".1f")
             cell.plotly_chart(figure, width="stretch")
 
 
@@ -86,7 +103,20 @@ def render_model_performance(metrics: pd.DataFrame) -> None:
     """Render model metrics and saved ROC/precision-recall figures."""
     st.header("Model performance")
     test_metrics = metrics[metrics["split"] == "test"].pivot(index="model_name", columns="metric", values="value").reset_index()
-    st.dataframe(test_metrics.round(3), width="stretch", hide_index=True)
+    test_metrics = test_metrics.rename(columns={
+        "model_name": "Model",
+        "accuracy": "Accuracy",
+        "precision": "Precision",
+        "recall": "Recall",
+        "f1": "F1",
+        "roc_auc": "ROC-AUC",
+        "pr_auc": "PR-AUC",
+    })
+    display_metrics = test_metrics.copy()
+    for column in ["Accuracy", "Precision", "Recall", "F1", "ROC-AUC", "PR-AUC"]:
+        if column in display_metrics:
+            display_metrics[column] = display_metrics[column].round(3)
+    st.dataframe(display_metrics, width="stretch", hide_index=True)
     st.info("XGBoost is the selected final model for retention-oriented review. Its test ROC-AUC was 0.845 versus 0.841 for Logistic Regression and 0.840 for Random Forest. Phase 4 cross-validation differences were within fold-level variation, so this is a practical choice rather than a statistically clear winner.")
     left, right = st.columns(2)
     with left:
@@ -106,14 +136,28 @@ def render_model_performance(metrics: pd.DataFrame) -> None:
 def render_risk_segments(tier_summary: pd.DataFrame) -> None:
     """Render tier sizes, observed rates, and profiles."""
     st.header("Risk segments")
+    tier_display = tier_summary.rename(columns={
+        "risk_tier": "Risk tier",
+        "customers": "Customers",
+        "actual_churn_rate": "Actual churn rate (%)",
+        "average_tenure": "Avg tenure (months)",
+        "average_monthly_charges": "Avg monthly charges ($)",
+        "common_contract": "Most common contract",
+        "common_internet_service": "Most common internet service",
+        "common_payment_method": "Most common payment method",
+    }).copy()
+    tier_display["Customers"] = tier_display["Customers"].astype(int)
+    tier_display["Actual churn rate (%)"] = tier_display["Actual churn rate (%)"].round(1)
+    tier_display["Avg tenure (months)"] = tier_display["Avg tenure (months)"].round(1)
+    tier_display["Avg monthly charges ($)"] = tier_display["Avg monthly charges ($)"].round(1)
     left, right = st.columns(2)
     with left:
-        figure = px.bar(tier_summary, x="risk_tier", y="customers", color="risk_tier", title="Customers by Risk Tier", labels={"customers": "Customers", "risk_tier": "Risk tier"}, color_discrete_map=TIER_COLORS, category_orders={"risk_tier": ["Low", "Medium", "High"]})
+        figure = px.bar(tier_display, x="Risk tier", y="Customers", color="Risk tier", title="Customers by Risk Tier", labels={"Customers": "Customers", "Risk tier": "Risk tier"}, color_discrete_map=TIER_COLORS, category_orders={"Risk tier": ["Low", "Medium", "High"]})
         st.plotly_chart(figure, width="stretch")
     with right:
-        figure = px.bar(tier_summary, x="risk_tier", y="actual_churn_rate", color="risk_tier", title="Observed Churn Rate by Risk Tier", labels={"actual_churn_rate": "Actual churn rate (%)", "risk_tier": "Risk tier"}, color_discrete_map=TIER_COLORS, category_orders={"risk_tier": ["Low", "Medium", "High"]}, text_auto=".1f")
+        figure = px.bar(tier_display, x="Risk tier", y="Actual churn rate (%)", color="Risk tier", title="Observed Churn Rate by Risk Tier", labels={"Actual churn rate (%)": "Actual churn rate (%)", "Risk tier": "Risk tier"}, color_discrete_map=TIER_COLORS, category_orders={"Risk tier": ["Low", "Medium", "High"]}, text_auto=".1f")
         st.plotly_chart(figure, width="stretch")
-    st.dataframe(tier_summary, width="stretch", hide_index=True)
+    st.dataframe(tier_display, width="stretch", hide_index=True)
 
 
 def render_high_risk_customers(customers: pd.DataFrame, risk_scores: pd.DataFrame) -> None:
@@ -128,8 +172,22 @@ def render_high_risk_customers(customers: pd.DataFrame, risk_scores: pd.DataFram
         charge_range = st.slider("Monthly charges", float(data["MonthlyCharges"].min()), float(data["MonthlyCharges"].max()), (float(data["MonthlyCharges"].min()), float(data["MonthlyCharges"].max())), key="risk_charge_filter")
     filtered = data[data["risk_tier"].isin(tiers) & data["Contract"].isin(contracts) & data["tenure"].between(*tenure_range) & data["MonthlyCharges"].between(*charge_range)].sort_values("risk_score", ascending=False)
     display_columns = ["customerID", "risk_score", "risk_tier", "actual_churn", "Contract", "tenure", "MonthlyCharges", "InternetService", "PaymentMethod"]
+    display_table = filtered[display_columns].rename(columns={
+        "customerID": "Customer ID",
+        "risk_score": "Risk score",
+        "risk_tier": "Risk tier",
+        "actual_churn": "Actual churn",
+        "Contract": "Contract",
+        "tenure": "Tenure (months)",
+        "MonthlyCharges": "Monthly charges ($)",
+        "InternetService": "Internet service",
+        "PaymentMethod": "Payment method",
+    }).copy()
+    display_table["Risk score"] = display_table["Risk score"].round(3)
+    display_table["Tenure (months)"] = display_table["Tenure (months)"].astype(int)
+    display_table["Monthly charges ($)"] = display_table["Monthly charges ($)"].round(1)
     st.write(f"Showing {len(filtered):,} customers")
-    st.dataframe(filtered[display_columns], width="stretch", hide_index=True)
+    st.dataframe(display_table, width="stretch", hide_index=True)
     st.download_button("Download filtered customer list", data=filtered[display_columns].to_csv(index=False).encode("utf-8"), file_name="filtered_customer_risk_scores.csv", mime="text/csv")
     st.caption("Privacy note: customer IDs shown here come from a public demonstration dataset.")
 

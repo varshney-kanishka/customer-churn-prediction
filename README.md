@@ -1,26 +1,77 @@
 # Customer Churn Prediction
 
-An end-to-end telecom churn analysis project: validate and clean the IBM Telco Customer Churn data, explore churn patterns, train leakage-safe models, create OOF-based risk tiers, load the outputs into SQLite, and inspect them in a Streamlit dashboard.
+This project validates and cleans IBM Telco Customer Churn data, explores churn patterns, trains three class-weighted models, evaluates a retained final model, segments customers by risk, stores results in SQLite, and presents a Streamlit dashboard. The work is reproducible and excludes the public dataset, models, database, and customer-level predictions from the repository.
 
-## Results Summary
+## Headline Results
 
-- Dataset: 7,043 customers; observed churn was 26.54% (`outputs/reports/data_validation_report.md`).
-- Month-to-month churn was 42.71%, compared with 2.83% for two-year contracts (`notebooks/customer_churn_eda.ipynb`).
-- XGBoost was selected for retention-oriented review: test ROC-AUC 0.845, PR-AUC 0.661, recall 0.799, and F1 0.625 (`outputs/reports/model_evaluation_report.md`).
-- Risk tiers rose as intended: Low 8.89%, Medium 31.89%, High 57.83% observed churn (`outputs/reports/risk_segmentation_report.md`).
-- The SQLite database contains 7,043 customers, 7,043 risk scores, 30 model-metric rows, and 3 tier-summary rows (`data/processed/churn.db`).
+**Dataset and churn:** The cleaned dataset contains 7,043 customers; 26.54% are marked as churned. Source: `outputs/metrics/model_metrics.json`, split counts; and `outputs/reports/risk_segmentation_report.md`.
 
-## Screenshots
+### Model comparison
 
-Screenshots are intentionally not fabricated. Add dashboard screenshots here manually after launching the app.
+| Model | CV ROC-AUC | CV std | Test ROC-AUC | Test recall | Test precision |
+|---|---:|---:|---:|---:|---:|
+| Logistic Regression | 0.846 | 0.012 | 0.841 | 0.789 | 0.497 |
+| Random Forest | 0.846 | 0.009 | 0.840 | 0.759 | 0.529 |
+| XGBoost | 0.847 | 0.012 | 0.845 | 0.799 | 0.513 |
 
-## Requirements
+Source: `outputs/metrics/model_metrics.json` and `outputs/metrics/evaluation_metrics.json`. The held-out differences are small and Phase 4 cross-validation differences are within fold standard deviations, so the models are not treated as clearly separated by this evidence. XGBoost is the final practical choice for retention-oriented review, but it is not claimed as universally superior.
 
-- Windows PowerShell
-- Python 3.12.4 tested
-- The IBM Telco Customer Churn CSV downloaded from [Kaggle](https://www.kaggle.com/datasets/blastchar/telco-customer-churn)
+**Risk tiers:**
 
-## Installation
+| Tier | Customers | Actual churn rate | Average tenure (months) |
+|---|---:|---:|---:|
+| Low | 4,161 | 8.89% | 43.25 |
+| Medium | 646 | 31.89% | 26.62 |
+| High | 2,236 | 57.83% | 13.79 |
+
+Source: `outputs/reports/risk_segmentation_report.md`. The threshold and tiers are real project outputs, with Low-to-High observed churn rising 8.89%, 31.89%, and 57.83%.
+
+**Top churn drivers:**
+
+- Contract permutation importance: 0.0736
+- Tenure permutation importance: 0.0560
+- InternetService permutation importance: 0.0097
+- TechSupport permutation importance: 0.0056
+- OnlineSecurity permutation importance: 0.0055
+
+Source: `outputs/reports/model_evaluation_report.md`. These are associations, not proof of cause.
+
+## Dashboard
+
+**Screenshots to be added.**
+
+### Overview
+
+![Overview](docs/images/overview.png)
+
+### Churn analysis
+
+![Churn analysis](docs/images/churn_analysis.png)
+
+### Model performance
+
+![Model performance](docs/images/model_performance.png)
+
+### Risk segments
+
+![Risk segments](docs/images/risk_segments.png)
+
+### High-risk customers
+
+![High-risk customers](docs/images/high_risk_customers.png)
+
+The placeholders point to future manually added screenshots. No fabricated images are included.
+
+## Quick Start on Windows PowerShell
+
+Clone the repository:
+
+```powershell
+git clone <repository-url>
+cd Customer-Churn-Prediction
+```
+
+Create and activate a virtual environment:
 
 ```powershell
 py -3.12 -m venv .venv
@@ -29,28 +80,19 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Place the downloaded file at:
+Download the IBM Telco Customer Churn CSV from Kaggle and place it at:
 
 ```text
 data/raw/WA_Fn-UseC_-Telco-Customer-Churn.csv
 ```
 
-If PowerShell blocks activation for this session:
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.venv\Scripts\Activate.ps1
-```
-
-## Run
-
-Run the complete reproducible workflow:
+Run the complete pipeline:
 
 ```powershell
 python scripts/run_pipeline.py
 ```
 
-Reuse existing models without retraining:
+Reuse existing models and skip retraining:
 
 ```powershell
 python scripts/run_pipeline.py --skip-training
@@ -68,28 +110,23 @@ Launch the dashboard:
 streamlit run dashboard/app.py
 ```
 
-The dashboard database is built by the pipeline. To rebuild it alone:
-
-```powershell
-python scripts/build_database.py
-```
-
 ## Project Structure
 
 ```text
-data/raw/                 Downloaded source CSV; never committed
-data/processed/           Cleaned data, split indices, and SQLite database
-src/                      Loading, validation, cleaning, features, models, evaluation, database
-scripts/                  Reproducible phase scripts and full pipeline
-notebooks/                EDA notebook
-models/                   Saved model pipelines; regenerated and ignored
-outputs/figures/          EDA and evaluation figures
-outputs/metrics/          Model and evaluation JSON metrics
-outputs/predictions/      Customer risk scores; regenerated and ignored
-outputs/reports/          Validation, cleaning, training, evaluation, and segmentation reports
+data/raw/                 Source dataset; ignored by Git
+data/processed/           Cleaned CSV, split indices, and SQLite database
+src/                      Loading, validation, cleaning, features, database, evaluation
+scripts/                  Validation, cleaning, training, evaluation, segmentation, pipeline
+notebooks/                Customer churn EDA notebook
+models/                   Saved sklearn pipelines; ignored by Git
+outputs/figures/          Static and interactive dashboard-ready figures
+outputs/metrics/          Phase 4 and Phase 5 metrics
+outputs/predictions/      Customer-level risk scores; ignored by Git
+outputs/reports/          Validation through segmentation reports
 reports/                  Business recommendations and final project report
-dashboard/                SQLite-backed Streamlit application
-tests/                    Unit and artifact integration tests
+dashboard/                SQLite-backed Streamlit app
+docs/images/              Manual dashboard screenshot placeholders
+tests/                    Unit and integration tests
 ```
 
 ## Technology Stack
@@ -98,8 +135,16 @@ Python 3.12.4, pandas, NumPy, scikit-learn, XGBoost, Matplotlib, Seaborn, Plotly
 
 ## Limitations
 
-The findings are associations, not causal conclusions. This is one public historical snapshot with no approved offer-cost or customer-lifetime-value data. Class-weighted model scores rank customers for review but are not calibrated probabilities. Thresholds, risk tiers, and recommendations require business validation, fairness review, and controlled testing.
+- This is a single public historical snapshot.
+- The churn drivers are associations, not proof of cause.
+- Risk scores from the class-weighted model rank customers but are not calibrated probabilities.
+- The dataset provides no verified cost or revenue data for offer decisions.
+- The public demonstration dataset should not be treated as live customer data.
 
-## Repository Data Policy
+## Generated Data Policy
 
-Raw data, processed data, SQLite databases, models, generated predictions, and generated output files are ignored by Git and regenerated by the pipeline. Do not commit customer-level data or model artifacts. No license file is included; choose and add a license separately if publication requires one.
+Data, models, database, and predictions are not in the repository and are regenerated by the pipeline. This includes the raw and cleaned CSV files, SQLite database, saved `.joblib` models, and customer risk-score CSV.
+
+## Tested Environment
+
+Tested on Windows with Python 3.12.4.
