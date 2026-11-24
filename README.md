@@ -146,3 +146,7 @@ The raw and cleaned CSV files, the SQLite database, the saved `.joblib` models a
 ## Tested Environment
 
 Tested on Windows with Python 3.12.4.
+
+## License
+
+This project's code is released under the MIT License (see `LICENSE`). The IBM Telco Customer Churn dataset is not included and is subject to its own terms on Kaggle.
