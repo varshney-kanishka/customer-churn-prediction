@@ -149,15 +149,18 @@ def inject_custom_css() -> None:
             color: #F8FAFC;
         }}
 
-        /* Sidebar Navigation: Hide Radio Circles Entirely */
+        /* Sidebar Navigation: Robust styling using stable data-testid & role attributes.
+           Streamlit nests (1) the circular radio indicator and (2) stMarkdownContainer
+           inside an inner flex div. Targeting '> div > div:first-child' hides solely
+           the circular radio mark without collapsing the label or Material icon text. */
         section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] {{
             gap: 0.35rem !important;
         }}
-        section[data-testid="stSidebar"] div[data-testid="stRadio"] label > div:first-child,
-        section[data-testid="stSidebar"] div[data-testid="stRadio"] label > div:first-of-type,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioOption"] > div > div:first-child,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioOption"] > div > div:not([data-testid="stMarkdownContainer"]),
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label > div > div:first-child,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label > div > div:not([data-testid="stMarkdownContainer"]),
         section[data-testid="stSidebar"] div[data-testid="stRadio"] input[type="radio"],
-        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-baseweb="radio"] > div:first-child,
-        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-baseweb="radio"] > div:first-of-type,
         section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stWidgetSelection"] {{
             display: none !important;
             visibility: hidden !important;
@@ -166,9 +169,32 @@ def inject_custom_css() -> None:
             opacity: 0 !important;
             margin: 0 !important;
             padding: 0 !important;
+            pointer-events: none !important;
         }}
 
-        /* Inactive Navigation Items: plain text, subtle hover */
+        /* Navigation Label & Material Icon Container */
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stMarkdownContainer"],
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label [data-testid="stMarkdownContainer"] {{
+            display: flex !important;
+            align-items: center !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }}
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stMarkdownContainer"] p {{
+            margin: 0 !important;
+            font-size: 0.9rem !important;
+            font-weight: 500 !important;
+            line-height: 1.4 !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 0.5rem !important;
+        }}
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stMarkdownContainer"] span {{
+            vertical-align: middle !important;
+        }}
+
+        /* Inactive Navigation Items: plain text, subtle hover state */
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioOption"],
         section[data-testid="stSidebar"] div[data-testid="stRadio"] label {{
             display: flex !important;
             align-items: center !important;
@@ -177,31 +203,44 @@ def inject_custom_css() -> None:
             border-left: 3px solid transparent !important;
             background-color: transparent !important;
             cursor: pointer !important;
-            transition: all 0.15s ease-in-out !important;
+            transition: background-color 0.15s ease, border-left-color 0.15s ease, color 0.15s ease !important;
             margin: 0 !important;
+            width: 100% !important;
         }}
-        section[data-testid="stSidebar"] div[data-testid="stRadio"] label p {{
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioOption"] p,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioOption"] span,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label p,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label span {{
             color: #94A3B8 !important;
-            font-size: 0.9rem !important;
-            font-weight: 500 !important;
-            margin: 0 !important;
             transition: color 0.15s ease-in-out !important;
         }}
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioOption"]:hover,
         section[data-testid="stSidebar"] div[data-testid="stRadio"] label:hover {{
             background-color: rgba(255, 255, 255, 0.05) !important;
         }}
-        section[data-testid="stSidebar"] div[data-testid="stRadio"] label:hover p {{
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioOption"]:hover p,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioOption"]:hover span,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label:hover p,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label:hover span {{
             color: #F8FAFC !important;
         }}
 
-        /* Active Navigation Item: highlighted background + blue left accent bar */
+        /* Active Navigation Item: highlighted background #1E293B + blue left accent bar */
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioOption"]:has(input:checked),
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioOption"][data-selected="true"],
         section[data-testid="stSidebar"] div[data-testid="stRadio"] label:has(input:checked),
-        section[data-testid="stSidebar"] div[data-testid="stRadio"] label[data-checked="true"] {{
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label[data-selected="true"] {{
             background-color: #1E293B !important;
             border-left: 3px solid {ACCENT_BLUE} !important;
         }}
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioOption"]:has(input:checked) p,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioOption"]:has(input:checked) span,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioOption"][data-selected="true"] p,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stRadioOption"][data-selected="true"] span,
         section[data-testid="stSidebar"] div[data-testid="stRadio"] label:has(input:checked) p,
-        section[data-testid="stSidebar"] div[data-testid="stRadio"] label[data-checked="true"] p {{
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label:has(input:checked) span,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label[data-selected="true"] p,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label[data-selected="true"] span {{
             color: #FFFFFF !important;
             font-weight: 600 !important;
         }}

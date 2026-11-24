@@ -578,11 +578,27 @@ def render_churn_analysis(customers: pd.DataFrame) -> None:
 
 
 def render_model_performance(metrics: pd.DataFrame) -> None:
-    """Render model metrics and saved ROC/precision-recall figures."""
+    """Render model comparison table, grouped benchmark chart, ROC/PR figures, and final confusion matrix."""
     render_page_header("Model Performance", DATABASE_PATH, is_loaded=True)
 
-    test_metrics = metrics[metrics["split"] == "test"].pivot(index="model_name", columns="metric", values="value").reset_index()
-    test_metrics = test_metrics.rename(columns={
+    # 1. Honest statistical note
+    st.info(
+        "XGBoost is the retained final model for retention-oriented review. Held-out test ROC-AUC was 0.845 "
+        "versus 0.841 for Logistic Regression and 0.840 for Random Forest. Cross-validation differences across "
+        "all three models were within fold-level standard deviations (CV std ~0.012), meaning held-out differences "
+        "are within cross-validation noise rather than establishing one model as statistically superior."
+    )
+
+    # 2. Extract held-out test split metrics
+    test_metrics = (
+        metrics[metrics["split"] == "test"]
+        .pivot(index="model_name", columns="metric", values="value")
+        .reset_index()
+    )
+    metric_cols = ["accuracy", "precision", "recall", "f1", "roc_auc", "pr_auc"]
+    available_cols = [c for c in metric_cols if c in test_metrics.columns]
+
+    rename_map = {
         "model_name": "Model",
         "accuracy": "Accuracy",
         "precision": "Precision",
@@ -590,28 +606,122 @@ def render_model_performance(metrics: pd.DataFrame) -> None:
         "f1": "F1",
         "roc_auc": "ROC-AUC",
         "pr_auc": "PR-AUC",
-    })
-    display_metrics = test_metrics.copy()
-    for column in ["Accuracy", "Precision", "Recall", "F1", "ROC-AUC", "PR-AUC"]:
-        if column in display_metrics:
-            display_metrics[column] = display_metrics[column].round(3)
+    }
+    table_df = test_metrics.rename(columns=rename_map)
+    display_cols = ["Model"] + [rename_map[c] for c in available_cols]
+    table_df = table_df[display_cols].copy()
 
-    st.dataframe(display_metrics, width="stretch", hide_index=True)
-    st.info("XGBoost is the selected final model for retention-oriented review. Its test ROC-AUC was 0.845 versus 0.841 for Logistic Regression and 0.840 for Random Forest. Phase 4 cross-validation differences were within fold-level variation, so this is a practical choice rather than a statistically clear winner.")
+    model_order = ["Logistic Regression", "Random Forest", "XGBoost"]
+    table_df["Model"] = pd.Categorical(table_df["Model"], categories=model_order, ordered=True)
+    table_df = table_df.sort_values("Model").reset_index(drop=True)
 
-    left, right = st.columns(2)
-    with left:
-        figure_path = FIGURES_DIR / "model_roc_curves.png"
-        if figure_path.exists():
-            st.image(str(figure_path), caption="ROC curves")
+    st.markdown(
+        """
+        <div style="margin-top: 1rem; margin-bottom: 0.5rem;">
+            <h3 style="font-size: 1.15rem; font-weight: 700; color: #101828; margin: 0;">Model Comparison (Held-Out Test Set)</h3>
+            <p style="font-size: 0.825rem; color: #667085; margin: 0.15rem 0 0 0;">Evaluated on 1,409 customer accounts (20% test split). Highlighting indicates highest metric value as a visual aid only.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    numeric_sub = display_cols[1:]
+    styled_df = table_df.style.highlight_max(subset=numeric_sub, color="#DCFCE7", axis=0).format(
+        {c: "{:.3f}" for c in numeric_sub}
+    )
+    st.dataframe(styled_df, width="stretch", hide_index=True)
+
+    # 3. Grouped Bar Chart Comparing the Models
+    chart_metrics = ["Accuracy", "Precision", "Recall", "F1", "ROC-AUC"]
+    chart_metrics = [m for m in chart_metrics if m in table_df.columns]
+
+    model_colors = {
+        "Logistic Regression": "#64748B",
+        "Random Forest": ACCENT_TEAL,
+        "XGBoost": ACCENT_BLUE,
+    }
+
+    fig_compare = go.Figure()
+    for model_name in model_order:
+        row = table_df[table_df["Model"] == model_name]
+        if not row.empty:
+            vals = [float(row[m].values[0]) for m in chart_metrics]
+            fig_compare.add_trace(
+                go.Bar(
+                    name=model_name,
+                    x=chart_metrics,
+                    y=vals,
+                    text=[f"{v:.3f}" for v in vals],
+                    textposition="auto",
+                    marker=dict(color=model_colors.get(model_name, ACCENT_BLUE)),
+                    hovertemplate=f"<b>{model_name}</b><br>%{{x}}: %{{y:.3f}}<extra></extra>",
+                )
+            )
+
+    apply_plotly_theme(fig_compare, height=350, title="Benchmark Comparison Across Evaluation Metrics", show_legend=True)
+    fig_compare.update_layout(barmode="group")
+    fig_compare.update_xaxes(title="Metric")
+    fig_compare.update_yaxes(title="Score", range=[0.4, 0.95])
+    st.plotly_chart(fig_compare, width="stretch")
+    st.caption("Differences between all three models are within cross-validation variance; XGBoost provides strong recall (0.799) for retention targeting.")
+
+    # 4. Evaluation Curves and Final Model Confusion Matrix
+    st.markdown(
+        """
+        <div style="margin-top: 1.5rem; margin-bottom: 0.75rem;">
+            <h3 style="font-size: 1.15rem; font-weight: 700; color: #101828; margin: 0;">Diagnostic Curves & Classification Breakdown</h3>
+            <p style="font-size: 0.825rem; color: #667085; margin: 0.15rem 0 0 0;">ROC discrimination, Precision-Recall tradeoff, and final XGBoost confusion matrix</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    curve_col1, curve_col2, matrix_col = st.columns([1, 1, 1])
+
+    with curve_col1:
+        roc_path = FIGURES_DIR / "model_roc_curves.png"
+        if roc_path.exists():
+            st.markdown(
+                """
+                <div style="background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 1rem; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+                    <div style="font-size: 0.85rem; font-weight: 700; color: #101828; margin-bottom: 0.5rem;">ROC Curves</div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.image(str(roc_path), caption="Receiver Operating Characteristic across models")
+            st.markdown("</div>", unsafe_allow_html=True)
         else:
-            st.warning("ROC figure is missing. Run scripts/evaluate_models.py.")
-    with right:
-        figure_path = FIGURES_DIR / "model_precision_recall_curves.png"
-        if figure_path.exists():
-            st.image(str(figure_path), caption="Precision-recall curves")
+            st.warning("ROC curves figure missing from outputs/figures/.")
+
+    with curve_col2:
+        pr_path = FIGURES_DIR / "model_precision_recall_curves.png"
+        if pr_path.exists():
+            st.markdown(
+                """
+                <div style="background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 1rem; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+                    <div style="font-size: 0.85rem; font-weight: 700; color: #101828; margin-bottom: 0.5rem;">Precision-Recall Curves</div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.image(str(pr_path), caption="Precision-Recall trade-off across models")
+            st.markdown("</div>", unsafe_allow_html=True)
         else:
-            st.warning("Precision-recall figure is missing. Run scripts/evaluate_models.py.")
+            st.warning("Precision-Recall curves figure missing from outputs/figures/.")
+
+    with matrix_col:
+        cm_path = FIGURES_DIR / "final_model_confusion_matrix.png"
+        if cm_path.exists():
+            st.markdown(
+                """
+                <div style="background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 1rem; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);">
+                    <div style="font-size: 0.85rem; font-weight: 700; color: #101828; margin-bottom: 0.5rem;">XGBoost Confusion Matrix</div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.image(str(cm_path), caption="Final XGBoost test split confusion matrix (threshold = 0.5)")
+            st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            st.warning("Confusion matrix figure missing from outputs/figures/.")
 
 
 def render_risk_segments(tier_summary: pd.DataFrame) -> None:
@@ -770,6 +880,12 @@ def render_high_risk_customers(customers: pd.DataFrame, risk_scores: pd.DataFram
     data = risk_scores.merge(customers, on="customerID", how="left", validate="one_to_one")
     with st.sidebar:
         st.markdown("<h4 style='color: #F8FAFC; margin-top: 0.5rem;'>Filters</h4>", unsafe_allow_html=True)
+        search_id = st.text_input(
+            "Search Customer ID",
+            placeholder="e.g. 7590-VHVEG",
+            key="risk_search_id",
+            help="Filter by specific customer ID prefix or substring",
+        )
         tiers = st.multiselect("Risk tier", ["High", "Medium", "Low"], default=["High"], key="risk_tier_filter")
         contracts = st.multiselect("Contract", sorted(data["Contract"].unique()), default=sorted(data["Contract"].unique()), key="risk_contract_filter")
         tenure_range = st.slider("Tenure (months)", 0, 72, (0, 72), key="risk_tenure_filter")
@@ -781,14 +897,28 @@ def render_high_risk_customers(customers: pd.DataFrame, risk_scores: pd.DataFram
             key="risk_charge_filter",
         )
 
-    filtered = data[
+    mask = (
         data["risk_tier"].isin(tiers)
         & data["Contract"].isin(contracts)
         & data["tenure"].between(*tenure_range)
         & data["MonthlyCharges"].between(*charge_range)
-    ].sort_values("risk_score", ascending=False)
+    )
+    if search_id.strip():
+        mask &= data["customerID"].str.contains(search_id.strip(), case=False, na=False)
 
-    display_columns = ["customerID", "risk_score", "risk_tier", "actual_churn", "Contract", "tenure", "MonthlyCharges", "InternetService", "PaymentMethod"]
+    filtered = data[mask].sort_values("risk_score", ascending=False)
+
+    display_columns = [
+        "customerID",
+        "risk_score",
+        "risk_tier",
+        "actual_churn",
+        "Contract",
+        "tenure",
+        "MonthlyCharges",
+        "InternetService",
+        "PaymentMethod",
+    ]
     display_table = filtered[display_columns].rename(columns={
         "customerID": "Customer ID",
         "risk_score": "Risk score",
@@ -800,12 +930,36 @@ def render_high_risk_customers(customers: pd.DataFrame, risk_scores: pd.DataFram
         "InternetService": "Internet service",
         "PaymentMethod": "Payment method",
     }).copy()
-    display_table["Risk score"] = display_table["Risk score"].round(3)
     display_table["Tenure (months)"] = display_table["Tenure (months)"].astype(int)
     display_table["Monthly charges ($)"] = display_table["Monthly charges ($)"].round(1)
 
-    st.write(f"Showing {len(filtered):,} customers")
-    st.dataframe(display_table, width="stretch", hide_index=True)
+    column_config = {
+        "Customer ID": st.column_config.TextColumn("Customer ID", help="Demonstration customer identifier", width="medium"),
+        "Risk score": st.column_config.ProgressColumn(
+            "Risk score",
+            help="Model risk score (0.0 to 1.0; ranks customers for review, not a calibrated probability)",
+            format="%.3f",
+            min_value=0.0,
+            max_value=1.0,
+            width="medium",
+        ),
+        "Risk tier": st.column_config.TextColumn("Risk tier", help="Assigned risk tier: Low (#16A34A), Medium (#F59E0B), or High (#DC2626)", width="small"),
+        "Actual churn": st.column_config.TextColumn("Actual churn", help="Observed outcome in public demonstration data", width="small"),
+        "Contract": st.column_config.TextColumn("Contract", width="medium"),
+        "Tenure (months)": st.column_config.NumberColumn("Tenure (months)", help="Account tenure in months", format="%d", width="small"),
+        "Monthly charges ($)": st.column_config.NumberColumn("Monthly charges ($)", help="Monthly recurring charges (MRC)", format="$%.1f", width="medium"),
+        "Internet service": st.column_config.TextColumn("Internet service", width="medium"),
+        "Payment method": st.column_config.TextColumn("Payment method", width="medium"),
+    }
+
+    st.write(f"Showing **{len(filtered):,}** customers")
+    st.dataframe(
+        display_table,
+        column_config=column_config,
+        width="stretch",
+        hide_index=True,
+        height=520,
+    )
     st.download_button(
         "Download filtered customer list",
         data=filtered[display_columns].to_csv(index=False).encode("utf-8"),
