@@ -400,6 +400,151 @@ def inject_custom_css() -> None:
             font-weight: 500;
         }}
 
+        /* Recommendations View: Styled Cards & Limited Width */
+        .rec-container {{
+            max-width: 920px;
+            margin: 0 auto;
+        }}
+        .rec-card {{
+            background: {CARD_BG};
+            border: 1px solid {BORDER_COLOR};
+            border-left: 4px solid {ACCENT_BLUE};
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04);
+        }}
+        .rec-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 0.65rem;
+        }}
+        .rec-title-group {{
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+        }}
+        .rec-badge {{
+            background-color: #EFF6FF;
+            color: {ACCENT_BLUE};
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 0.25rem 0.6rem;
+            border-radius: 9999px;
+            border: 1px solid #DBEAFE;
+        }}
+        .rec-title {{
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: {TEXT_PRIMARY};
+        }}
+        .rec-stat-badge {{
+            background-color: #F8FAFC;
+            color: #475467;
+            font-size: 0.78rem;
+            font-weight: 600;
+            padding: 0.25rem 0.65rem;
+            border-radius: 6px;
+            border: 1px solid {BORDER_COLOR};
+        }}
+        .rec-body {{
+            font-size: 0.885rem;
+            color: #374151;
+            line-height: 1.6;
+        }}
+        .rec-body code {{
+            background: #F1F5F9;
+            color: #0F172A;
+            padding: 0.15rem 0.35rem;
+            border-radius: 4px;
+            font-size: 0.825rem;
+            font-family: monospace;
+        }}
+
+        /* Note & Limitations Cards */
+        .rec-note-card {{
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-left: 4px solid #64748B;
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+            margin-top: 1.25rem;
+            margin-bottom: 1rem;
+        }}
+        .rec-note-title {{
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #1E293B;
+            margin-bottom: 0.4rem;
+        }}
+        .rec-note-body {{
+            font-size: 0.85rem;
+            color: #475467;
+            line-height: 1.55;
+        }}
+        .rec-limitations-card {{
+            background: #FFFBEB;
+            border: 1px solid #FDE68A;
+            border-left: 4px solid #F59E0B;
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+            margin-top: 1rem;
+            margin-bottom: 1rem;
+        }}
+        .rec-limitations-title {{
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #92400E;
+            margin-bottom: 0.5rem;
+        }}
+        .rec-limitations-list {{
+            margin: 0;
+            padding-left: 1.25rem;
+            font-size: 0.85rem;
+            color: #78350F;
+            line-height: 1.6;
+        }}
+
+        /* Responsive & Accessibility Enhancements */
+        @media (max-width: 900px) {{
+            .block-container {{
+                padding-left: 1rem !important;
+                padding-right: 1rem !important;
+            }}
+            .page-header-container {{
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.75rem;
+            }}
+            .header-meta {{
+                flex-wrap: wrap;
+            }}
+            .kpi-card {{
+                min-height: 110px;
+                height: auto;
+            }}
+            .rec-header {{
+                flex-direction: column;
+                align-items: flex-start;
+            }}
+        }}
+
+        /* Contain horizontal scroll at the page root, ensure table containers scroll internally */
+        .stApp {{
+            overflow-x: hidden;
+        }}
+        div[data-testid="stDataFrame"],
+        div[data-testid="stTable"] {{
+            max-width: 100% !important;
+            overflow-x: auto !important;
+        }}
+
         /* Footer */
         .churniq-footer {{
             border-top: 1px solid {BORDER_COLOR};

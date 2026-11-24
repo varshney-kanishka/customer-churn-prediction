@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import sys
 
 import pandas as pd
@@ -970,14 +971,99 @@ def render_high_risk_customers(customers: pd.DataFrame, risk_scores: pd.DataFram
 
 
 def render_recommendations() -> None:
-    """Render the real recommendations report."""
+    """Render the business recommendations report as styled cards in a width-limited container."""
     render_page_header("Strategic Recommendations", DATABASE_PATH, is_loaded=True)
 
     report_path = (OUTPUTS_DIR.parent / "reports" / "business_recommendations.md").resolve()
-    if report_path.exists():
-        st.markdown(report_path.read_text(encoding="utf-8"))
-    else:
+    if not report_path.exists():
         st.error("Recommendations report is missing. Run the Phase 5 workflow first.")
+        return
+
+    content = report_path.read_text(encoding="utf-8")
+    sections = re.split(r"\n(?=## )", content)
+
+    # Supporting numbers mapped to recommendations
+    supporting_metrics = {
+        1: "57.83% High-Tier Churn &bull; 2,236 Accounts",
+        2: "47.44% First-Year Churn &bull; 13.8 Mo Avg Tenure",
+        3: "42.71% Month-to-Month Churn (vs 2.83% Two-Year)",
+        4: "45.29% Electronic Check Churn (vs 15.24% Auto Credit Card)",
+        5: "41.64% No TechSupport &bull; 41.77% No OnlineSecurity",
+    }
+
+    # Width-limited container layout
+    st.markdown('<div class="rec-container">', unsafe_allow_html=True)
+
+    # Preamble / Context card
+    if len(sections) > 0:
+        preamble_lines = sections[0].strip().split("\n")
+        preamble_text = "\n".join([line for line in preamble_lines if not line.startswith("#")]).strip()
+        if preamble_text:
+            st.info(preamble_text)
+
+    # Render recommendations 1 to 5 as styled cards
+    for section in sections[1:]:
+        lines = section.strip().split("\n")
+        header = lines[0].replace("## ", "").strip()
+        body = "\n".join(lines[1:]).strip()
+
+        # Check if recommendation 1-5
+        rec_match = re.match(r"^(\d+)\.\s*(.*)", header)
+        if rec_match:
+            rec_num = int(rec_match.group(1))
+            rec_title = rec_match.group(2)
+            stat_badge = supporting_metrics.get(rec_num, "")
+
+            # Convert markdown inline code `code` to <code>code</code> without altering wording
+            body_html = re.sub(r"`([^`]+)`", r"<code>\1</code>", body)
+
+            st.markdown(
+                f"""
+                <div class="rec-card">
+                    <div class="rec-header">
+                        <div class="rec-title-group">
+                            <span class="rec-badge">Recommendation {rec_num}</span>
+                            <span class="rec-title">{rec_title}</span>
+                        </div>
+                        <span class="rec-stat-badge">{stat_badge}</span>
+                    </div>
+                    <div class="rec-body">{body_html}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        elif "Cost Assumption Note" in header:
+            body_html = re.sub(r"`([^`]+)`", r"<code>\1</code>", body)
+            st.markdown(
+                f"""
+                <div class="rec-note-card">
+                    <div class="rec-note-title">Cost Assumption Note</div>
+                    <div class="rec-note-body">{body_html}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        elif "Limitations" in header:
+            # Format bullet points
+            bullet_items = [
+                f"<li>{line.lstrip('- ').strip()}</li>"
+                for line in body.split("\n")
+                if line.strip().startswith("-")
+            ]
+            bullets_html = "".join(bullet_items)
+            st.markdown(
+                f"""
+                <div class="rec-limitations-card">
+                    <div class="rec-limitations-title">Analytical Scope &amp; Governance Limitations</div>
+                    <ul class="rec-limitations-list">
+                        {bullets_html}
+                    </ul>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def main() -> None:
