@@ -124,6 +124,19 @@ def inject_custom_css() -> None:
         header [data-testid="stToolbar"] {{visibility: hidden;}}
         footer {{visibility: hidden;}}
 
+        /* Hide Heading Anchor / Link Icons */
+        [data-testid="stHeaderActionElements"],
+        .header-anchor,
+        a.header-anchor,
+        a[data-testid="stHeaderAnchor"],
+        [data-testid="stMarkdownContainer"] a.header-anchor,
+        h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {{
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }}
+
         /* Sidebar Styling (Dark Navy #101828) */
         section[data-testid="stSidebar"] {{
             background-color: {NAVY_SIDEBAR} !important;
@@ -133,23 +146,66 @@ def inject_custom_css() -> None:
             gap: 0.6rem;
         }}
         section[data-testid="stSidebar"] * {{
-            color: #F8FAFC !important;
+            color: #F8FAFC;
         }}
-        section[data-testid="stSidebar"] .stRadio label {{
-            color: #E2E8F0 !important;
+
+        /* Sidebar Navigation: Hide Radio Circles Entirely */
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] div[role="radiogroup"] {{
+            gap: 0.35rem !important;
+        }}
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label > div:first-child,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label > div:first-of-type,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] input[type="radio"],
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-baseweb="radio"] > div:first-child,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-baseweb="radio"] > div:first-of-type,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] [data-testid="stWidgetSelection"] {{
+            display: none !important;
+            visibility: hidden !important;
+            width: 0 !important;
+            height: 0 !important;
+            opacity: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }}
+
+        /* Inactive Navigation Items: plain text, subtle hover */
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label {{
+            display: flex !important;
+            align-items: center !important;
+            padding: 0.55rem 0.85rem !important;
+            border-radius: 8px !important;
+            border-left: 3px solid transparent !important;
+            background-color: transparent !important;
+            cursor: pointer !important;
+            transition: all 0.15s ease-in-out !important;
+            margin: 0 !important;
+        }}
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label p {{
+            color: #94A3B8 !important;
             font-size: 0.9rem !important;
             font-weight: 500 !important;
-            padding: 0.35rem 0.6rem !important;
-            border-radius: 6px !important;
-            transition: all 0.15s ease-in-out;
+            margin: 0 !important;
+            transition: color 0.15s ease-in-out !important;
         }}
-        section[data-testid="stSidebar"] .stRadio label:hover {{
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label:hover {{
+            background-color: rgba(255, 255, 255, 0.05) !important;
+        }}
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label:hover p {{
+            color: #F8FAFC !important;
+        }}
+
+        /* Active Navigation Item: highlighted background + blue left accent bar */
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label:has(input:checked),
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label[data-checked="true"] {{
             background-color: #1E293B !important;
+            border-left: 3px solid {ACCENT_BLUE} !important;
+        }}
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label:has(input:checked) p,
+        section[data-testid="stSidebar"] div[data-testid="stRadio"] label[data-checked="true"] p {{
             color: #FFFFFF !important;
+            font-weight: 600 !important;
         }}
-        section[data-testid="stSidebar"] .stRadio div[role="radiogroup"] {{
-            gap: 0.3rem;
-        }}
+
         section[data-testid="stSidebar"] hr {{
             border-color: #1F2A37 !important;
             margin: 0.8rem 0;
@@ -161,17 +217,19 @@ def inject_custom_css() -> None:
             font-weight: 500 !important;
         }}
 
-        /* KPI Card Component */
+        /* KPI Card Component: Equal Fixed Height & Overflow Protection */
         .kpi-card {{
             background: {CARD_BG};
             border: 1px solid {BORDER_COLOR};
             border-radius: 14px;
-            padding: 1.25rem 1.25rem;
+            padding: 1.15rem 1.15rem;
             box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05);
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             min-height: 125px;
+            height: 125px;
+            box-sizing: border-box;
             transition: box-shadow 0.2s ease, transform 0.2s ease;
         }}
         .kpi-card:hover {{
@@ -181,14 +239,17 @@ def inject_custom_css() -> None:
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 0.4rem;
+            margin-bottom: 0.35rem;
         }}
         .kpi-label {{
-            font-size: 0.78rem;
+            font-size: 0.72rem;
             font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            text-transform: none;
+            letter-spacing: 0.01em;
             color: {TEXT_MUTED};
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }}
         .kpi-value {{
             font-size: 1.85rem;
@@ -198,9 +259,12 @@ def inject_custom_css() -> None:
             letter-spacing: -0.02em;
         }}
         .kpi-caption {{
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             color: {TEXT_MUTED};
-            margin-top: 0.35rem;
+            margin-top: 0.25rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }}
 
         /* Section Cards & Containers */

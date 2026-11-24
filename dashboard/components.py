@@ -93,33 +93,33 @@ def render_kpi_row(customers: pd.DataFrame) -> None:
     cols = st.columns(5)
     with cols[0]:
         render_kpi_card(
-            label="Total Customers",
+            label="Total customers",
             value=f"{total_customers:,}",
-            caption="Active portfolio snapshot",
+            caption="Active accounts",
         )
     with cols[1]:
         render_kpi_card(
-            label="Churned Customers",
+            label="Churned customers",
             value=f"{churned_customers:,}",
-            caption=f"of {total_customers:,} total",
+            caption=f"of {total_customers:,} customers",
         )
     with cols[2]:
         render_kpi_card(
-            label="Overall Churn Rate",
+            label="Churn rate",
             value=f"{churn_rate:.1f}%",
-            caption="Observed customer attrition",
+            caption="Portfolio rate",
         )
     with cols[3]:
         render_kpi_card(
-            label="Retention Rate",
+            label="Retention rate",
             value=f"{retention_rate:.1f}%",
             caption=f"{total_customers - churned_customers:,} retained",
         )
     with cols[4]:
         render_kpi_card(
-            label="Avg Monthly Charges",
+            label="Avg monthly charge",
             value=f"${avg_mrc:,.1f}",
-            caption=f"${total_mrc:,.0f} total MRC",
+            caption=f"${total_mrc:,.0f} MRC",
         )
 
     # Secondary strip for MRC impact
@@ -156,6 +156,37 @@ def render_kpi_row(customers: pd.DataFrame) -> None:
             unsafe_allow_html=True,
         )
     st.markdown("<div style='margin-bottom: 1.25rem;'></div>", unsafe_allow_html=True)
+
+
+def render_tier_card(
+    tier: str,
+    customers: int,
+    share: float,
+    churn_rate: float,
+    color: str,
+    avg_tenure: float,
+    avg_mrc: float,
+) -> None:
+    """Render a dedicated metric card for a risk tier."""
+    st.markdown(
+        f"""
+        <div style="background: #FFFFFF; border: 1px solid #E5E7EB; border-top: 4px solid {color}; border-radius: 12px; padding: 1.25rem; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05); min-height: 145px; display: flex; flex-direction: column; justify-content: space-between;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <span style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: {color};">{tier} Risk Tier</span>
+                <span style="background: #F1F5F9; color: #475467; font-size: 0.75rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 9999px;">{share:.1f}% of base</span>
+            </div>
+            <div>
+                <div style="font-size: 1.85rem; font-weight: 700; color: #101828; line-height: 1.1;">{customers:,}</div>
+                <div style="font-size: 0.8rem; color: #667085; margin-top: 0.25rem;">Customers &bull; Avg ${avg_mrc:,.1f}/mo</div>
+            </div>
+            <div style="margin-top: 0.75rem; padding-top: 0.65rem; border-top: 1px solid #F1F5F9; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.8rem; color: #667085;">Observed Churn Rate</span>
+                <span style="font-size: 0.95rem; font-weight: 700; color: {color};">{churn_rate:.1f}%</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_insight_card(title: str, body: str) -> None:

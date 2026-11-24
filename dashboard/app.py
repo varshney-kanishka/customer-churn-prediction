@@ -17,6 +17,7 @@ from dashboard.components import (
     render_insight_card,
     render_kpi_row,
     render_page_header,
+    render_tier_card,
 )
 from dashboard.styles import (
     ACCENT_BLUE,
@@ -301,7 +302,7 @@ def render_overview(customers: pd.DataFrame, tier_summary: pd.DataFrame) -> None
 
 
 def render_churn_analysis(customers: pd.DataFrame) -> None:
-    """Render filterable churn rates for contract, service, payment, and tenure."""
+    """Render filterable churn rates across contract, service, payment, tenure, charges, and demographics."""
     render_page_header("Churn Analysis", DATABASE_PATH, is_loaded=True)
 
     with st.sidebar:
@@ -319,32 +320,261 @@ def render_churn_analysis(customers: pd.DataFrame) -> None:
             key="churn_internet_filter",
         )
 
-    filtered = customers[customers["Contract"].isin(contract_filter) & customers["InternetService"].isin(internet_filter)].copy()
+    filtered = customers[
+        customers["Contract"].isin(contract_filter) & customers["InternetService"].isin(internet_filter)
+    ].copy()
+
+    if filtered.empty:
+        st.warning("No customers match the selected contract and internet service filters.")
+        return
+
+    st.caption(
+        f"Analyzing churn drivers across {len(filtered):,} matching customers "
+        f"({len(filtered)/len(customers)*100:.1f}% of total portfolio)."
+    )
+
     filtered["tenure_group"] = pd.cut(
         filtered["tenure"],
         bins=[-1, 12, 24, 48, 72],
         labels=["0-12 months", "13-24 months", "25-48 months", "49-72 months"],
     )
-    dimensions = ["Contract", "InternetService", "PaymentMethod", "tenure_group"]
-    for start in range(0, len(dimensions), 2):
-        cells = st.columns(2)
-        for cell, column in zip(cells, dimensions[start : start + 2]):
-            rates = filtered.groupby(column, observed=False)["churn_flag"].agg(customers="size", churn_rate="mean").reset_index()
-            rates["churn_rate"] *= 100
-            display_rates = rates.rename(columns={"customers": "Customers", "churn_rate": "Churn rate (%)"}).copy()
-            display_rates["Customers"] = display_rates["Customers"].astype(int)
-            display_rates["Churn rate (%)"] = display_rates["Churn rate (%)"].round(1)
-            figure = px.bar(
-                display_rates,
-                x=column,
-                y="Churn rate (%)",
-                title=f"Churn Rate by {column}",
-                labels={"Churn rate (%)": "Churn rate (%)", column: column},
-                text_auto=".1f",
-                color_discrete_sequence=[ACCENT_BLUE],
-            )
-            apply_plotly_theme(figure, height=330, title=f"Churn Rate by {column}")
-            cell.plotly_chart(figure, width="stretch")
+    charge_bins = [-1, 35, 70, 90, 200]
+    charge_labels = ["$0-$35 (Basic)", "$35-$70 (Mid)", "$70-$90 (High)", "$90+ (Premium)"]
+    filtered["charge_band"] = pd.cut(
+        filtered["MonthlyCharges"],
+        bins=charge_bins,
+        labels=charge_labels,
+    )
+
+    # Row 1: Contract Commitment & Internet Service
+    row1_col1, row1_col2 = st.columns(2)
+
+    with row1_col1:
+        contract_rates = (
+            filtered.groupby("Contract", observed=False)["churn_flag"]
+            .agg(customers="size", churn_rate="mean")
+            .reset_index()
+        )
+        contract_rates["churn_rate"] *= 100
+        contract_order = ["Month-to-month", "One year", "Two year"]
+        contract_rates["Contract"] = pd.Categorical(
+            contract_rates["Contract"], categories=contract_order, ordered=True
+        )
+        contract_rates = contract_rates.sort_values("Contract")
+        contract_rates["label"] = contract_rates.apply(
+            lambda r: f"{r['churn_rate']:.1f}% ({r['customers']:,})", axis=1
+        )
+
+        fig_contract = go.Figure(
+            data=[
+                go.Bar(
+                    x=contract_rates["Contract"],
+                    y=contract_rates["churn_rate"],
+                    text=contract_rates["label"],
+                    textposition="auto",
+                    marker=dict(color=["#DC2626", "#F59E0B", "#16A34A"]),
+                    hovertemplate="<b>%{x}</b><br>Churn Rate: %{y:.1f}%<br>Customers: %{customdata:,}<extra></extra>",
+                    customdata=contract_rates["customers"],
+                )
+            ]
+        )
+        apply_plotly_theme(fig_contract, height=340, title="Churn Rate by Contract Commitment", show_legend=False)
+        fig_contract.update_xaxes(title="Contract Type")
+        fig_contract.update_yaxes(title="Churn Rate (%)")
+        st.plotly_chart(fig_contract, width="stretch")
+        st.caption("Month-to-month contracts have the highest attrition; multi-year commitments show strong retention.")
+
+    with row1_col2:
+        internet_rates = (
+            filtered.groupby("InternetService", observed=False)["churn_flag"]
+            .agg(customers="size", churn_rate="mean")
+            .reset_index()
+        )
+        internet_rates["churn_rate"] *= 100
+        internet_rates = internet_rates.sort_values("churn_rate", ascending=False)
+        internet_rates["label"] = internet_rates.apply(
+            lambda r: f"{r['churn_rate']:.1f}% ({r['customers']:,})", axis=1
+        )
+
+        fig_internet = go.Figure(
+            data=[
+                go.Bar(
+                    x=internet_rates["InternetService"],
+                    y=internet_rates["churn_rate"],
+                    text=internet_rates["label"],
+                    textposition="auto",
+                    marker=dict(color=ACCENT_BLUE),
+                    hovertemplate="<b>%{x}</b><br>Churn Rate: %{y:.1f}%<br>Customers: %{customdata:,}<extra></extra>",
+                    customdata=internet_rates["customers"],
+                )
+            ]
+        )
+        apply_plotly_theme(fig_internet, height=340, title="Churn Rate by Internet Service", show_legend=False)
+        fig_internet.update_xaxes(title="Internet Service")
+        fig_internet.update_yaxes(title="Churn Rate (%)")
+        st.plotly_chart(fig_internet, width="stretch")
+        st.caption("Fiber optic accounts show higher churn compared to DSL or telephone-only subscriptions.")
+
+    # Row 2: Payment Method & Tenure Cohort
+    row2_col1, row2_col2 = st.columns(2)
+
+    with row2_col1:
+        pay_rates = (
+            filtered.groupby("PaymentMethod", observed=False)["churn_flag"]
+            .agg(customers="size", churn_rate="mean")
+            .reset_index()
+        )
+        pay_rates["churn_rate"] *= 100
+        pay_rates = pay_rates.sort_values("churn_rate", ascending=False)
+        pay_rates["label"] = pay_rates.apply(
+            lambda r: f"{r['churn_rate']:.1f}% ({r['customers']:,})", axis=1
+        )
+        pay_colors = [
+            "#DC2626" if "electronic check" in str(m).lower() else ACCENT_BLUE
+            for m in pay_rates["PaymentMethod"]
+        ]
+
+        fig_pay = go.Figure(
+            data=[
+                go.Bar(
+                    x=pay_rates["PaymentMethod"],
+                    y=pay_rates["churn_rate"],
+                    text=pay_rates["label"],
+                    textposition="auto",
+                    marker=dict(color=pay_colors),
+                    hovertemplate="<b>%{x}</b><br>Churn Rate: %{y:.1f}%<br>Customers: %{customdata:,}<extra></extra>",
+                    customdata=pay_rates["customers"],
+                )
+            ]
+        )
+        apply_plotly_theme(fig_pay, height=340, title="Churn Rate by Payment Method", show_legend=False)
+        fig_pay.update_xaxes(title="Payment Method", tickangle=-15)
+        fig_pay.update_yaxes(title="Churn Rate (%)")
+        st.plotly_chart(fig_pay, width="stretch")
+        st.caption("Electronic check payment exhibits the highest friction and attrition compared to automated methods.")
+
+    with row2_col2:
+        tenure_rates = (
+            filtered.groupby("tenure_group", observed=False)["churn_flag"]
+            .agg(customers="size", churn_rate="mean")
+            .reset_index()
+        )
+        tenure_rates["churn_rate"] *= 100
+        tenure_rates["label"] = tenure_rates.apply(
+            lambda r: f"{r['churn_rate']:.1f}% ({r['customers']:,})", axis=1
+        )
+
+        fig_tenure = go.Figure(
+            data=[
+                go.Bar(
+                    x=tenure_rates["tenure_group"],
+                    y=tenure_rates["churn_rate"],
+                    text=tenure_rates["label"],
+                    textposition="auto",
+                    marker=dict(color=ACCENT_BLUE),
+                    hovertemplate="<b>%{x}</b><br>Churn Rate: %{y:.1f}%<br>Customers: %{customdata:,}<extra></extra>",
+                    customdata=tenure_rates["customers"],
+                )
+            ]
+        )
+        apply_plotly_theme(fig_tenure, height=340, title="Churn Rate by Tenure Cohort", show_legend=False)
+        fig_tenure.update_xaxes(title="Tenure Group")
+        fig_tenure.update_yaxes(title="Churn Rate (%)")
+        st.plotly_chart(fig_tenure, width="stretch")
+        st.caption("New customers in their first 12 months churn at the highest rate, dropping as accounts mature.")
+
+    # Row 3: Monthly Charges Bands & Demographic Grouped Bar
+    row3_col1, row3_col2 = st.columns(2)
+
+    with row3_col1:
+        charge_rates = (
+            filtered.groupby("charge_band", observed=False)["churn_flag"]
+            .agg(customers="size", churn_rate="mean")
+            .reset_index()
+        )
+        charge_rates["churn_rate"] *= 100
+        charge_rates["label"] = charge_rates.apply(
+            lambda r: f"{r['churn_rate']:.1f}% ({r['customers']:,})", axis=1
+        )
+
+        fig_charge = go.Figure(
+            data=[
+                go.Bar(
+                    x=charge_rates["charge_band"],
+                    y=charge_rates["churn_rate"],
+                    text=charge_rates["label"],
+                    textposition="auto",
+                    marker=dict(color=ACCENT_BLUE),
+                    hovertemplate="<b>%{x}</b><br>Churn Rate: %{y:.1f}%<br>Customers: %{customdata:,}<extra></extra>",
+                    customdata=charge_rates["customers"],
+                )
+            ]
+        )
+        apply_plotly_theme(fig_charge, height=340, title="Churn Rate by Monthly Charges Band", show_legend=False)
+        fig_charge.update_xaxes(title="Monthly Charges Band")
+        fig_charge.update_yaxes(title="Churn Rate (%)")
+        st.plotly_chart(fig_charge, width="stretch")
+        st.caption("Higher monthly recurring charges ($70+) correlate with increased customer attrition.")
+
+    with row3_col2:
+        demo_categories = ["Senior Citizen", "Partner", "Dependents"]
+
+        sr_no_mask = filtered["SeniorCitizen"] == 0
+        sr_yes_mask = filtered["SeniorCitizen"] == 1
+        sr_no_rate = (filtered.loc[sr_no_mask, "churn_flag"].mean() * 100) if sr_no_mask.sum() > 0 else 0
+        sr_yes_rate = (filtered.loc[sr_yes_mask, "churn_flag"].mean() * 100) if sr_yes_mask.sum() > 0 else 0
+        sr_no_count = int(sr_no_mask.sum())
+        sr_yes_count = int(sr_yes_mask.sum())
+
+        pt_no_mask = filtered["Partner"] == "No"
+        pt_yes_mask = filtered["Partner"] == "Yes"
+        pt_no_rate = (filtered.loc[pt_no_mask, "churn_flag"].mean() * 100) if pt_no_mask.sum() > 0 else 0
+        pt_yes_rate = (filtered.loc[pt_yes_mask, "churn_flag"].mean() * 100) if pt_yes_mask.sum() > 0 else 0
+        pt_no_count = int(pt_no_mask.sum())
+        pt_yes_count = int(pt_yes_mask.sum())
+
+        dp_no_mask = filtered["Dependents"] == "No"
+        dp_yes_mask = filtered["Dependents"] == "Yes"
+        dp_no_rate = (filtered.loc[dp_no_mask, "churn_flag"].mean() * 100) if dp_no_mask.sum() > 0 else 0
+        dp_yes_rate = (filtered.loc[dp_yes_mask, "churn_flag"].mean() * 100) if dp_yes_mask.sum() > 0 else 0
+        dp_no_count = int(dp_no_mask.sum())
+        dp_yes_count = int(dp_yes_mask.sum())
+
+        no_rates = [sr_no_rate, pt_no_rate, dp_no_rate]
+        no_counts = [sr_no_count, pt_no_count, dp_no_count]
+        yes_rates = [sr_yes_rate, pt_yes_rate, dp_yes_rate]
+        yes_counts = [sr_yes_count, pt_yes_count, dp_yes_count]
+
+        fig_demo = go.Figure(
+            data=[
+                go.Bar(
+                    name="No / Non-Senior",
+                    x=demo_categories,
+                    y=no_rates,
+                    text=[f"{r:.1f}%" for r in no_rates],
+                    textposition="auto",
+                    marker=dict(color=ACCENT_TEAL),
+                    hovertemplate="<b>%{x} (No / Non-Senior)</b><br>Churn Rate: %{y:.1f}%<br>Customers: %{customdata:,}<extra></extra>",
+                    customdata=no_counts,
+                ),
+                go.Bar(
+                    name="Yes / Senior",
+                    x=demo_categories,
+                    y=yes_rates,
+                    text=[f"{r:.1f}%" for r in yes_rates],
+                    textposition="auto",
+                    marker=dict(color="#DC2626"),
+                    hovertemplate="<b>%{x} (Yes / Senior)</b><br>Churn Rate: %{y:.1f}%<br>Customers: %{customdata:,}<extra></extra>",
+                    customdata=yes_counts,
+                ),
+            ]
+        )
+        apply_plotly_theme(fig_demo, height=340, title="Churn Rate by Demographic Segments", show_legend=True)
+        fig_demo.update_layout(barmode="group")
+        fig_demo.update_xaxes(title="Demographic Attribute")
+        fig_demo.update_yaxes(title="Churn Rate (%)")
+        st.plotly_chart(fig_demo, width="stretch")
+        st.caption("Senior citizens and customers without partners or dependents exhibit higher churn risk.")
 
 
 def render_model_performance(metrics: pd.DataFrame) -> None:
@@ -385,8 +615,132 @@ def render_model_performance(metrics: pd.DataFrame) -> None:
 
 
 def render_risk_segments(tier_summary: pd.DataFrame) -> None:
-    """Render tier sizes, observed rates, and profiles."""
+    """Render risk tier cards, churn progression, customer volume share, profiles, and live insights."""
     render_page_header("Risk Segments", DATABASE_PATH, is_loaded=True)
+
+    tier_df = tier_summary.copy()
+    total_customers = int(tier_df["customers"].sum())
+    tier_df["share"] = tier_df["customers"] / total_customers * 100
+
+    # 1. Tier Metric Cards (3 Columns)
+    tier_cols = st.columns(3)
+    for idx, row in tier_df.iterrows():
+        tier = row["risk_tier"]
+        tier_color = TIER_COLORS.get(tier, ACCENT_BLUE)
+        with tier_cols[idx]:
+            render_tier_card(
+                tier=tier,
+                customers=int(row["customers"]),
+                share=float(row["share"]),
+                churn_rate=float(row["actual_churn_rate"]),
+                color=tier_color,
+                avg_tenure=float(row["average_tenure"]),
+                avg_mrc=float(row["average_monthly_charges"]),
+            )
+
+    st.markdown("<div style='margin-bottom: 1.25rem;'></div>", unsafe_allow_html=True)
+
+    # 2. Charts Row: Actual Churn Rate per Tier & Customer Volume Share
+    chart_col1, chart_col2 = st.columns(2)
+
+    with chart_col1:
+        tier_df["label"] = tier_df.apply(
+            lambda r: f"{r['actual_churn_rate']:.1f}% ({int(r['customers']):,})", axis=1
+        )
+        fig_rate = go.Figure(
+            data=[
+                go.Bar(
+                    x=tier_df["risk_tier"],
+                    y=tier_df["actual_churn_rate"],
+                    text=tier_df["label"],
+                    textposition="auto",
+                    marker=dict(color=[TIER_COLORS.get(t, ACCENT_BLUE) for t in tier_df["risk_tier"]]),
+                    hovertemplate="<b>%{x} Risk Tier</b><br>Observed Churn: %{y:.1f}%<br>Customers: %{customdata:,}<extra></extra>",
+                    customdata=tier_df["customers"],
+                )
+            ]
+        )
+        apply_plotly_theme(fig_rate, height=340, title="Observed Churn Rate by Risk Tier", show_legend=False)
+        fig_rate.update_xaxes(
+            title="Risk Tier",
+            categoryorder="array",
+            categoryarray=["Low", "Medium", "High"],
+        )
+        fig_rate.update_yaxes(title="Observed Churn Rate (%)")
+        st.plotly_chart(fig_rate, width="stretch")
+        st.caption("Monotonically rising churn rates confirm that risk score thresholds effectively segment customer risk.")
+
+    with chart_col2:
+        fig_share = go.Figure(
+            data=[
+                go.Pie(
+                    labels=tier_df["risk_tier"],
+                    values=tier_df["customers"],
+                    hole=0.62,
+                    marker=dict(colors=[TIER_COLORS.get(t, ACCENT_BLUE) for t in tier_df["risk_tier"]]),
+                    textinfo="label+percent",
+                    hovertemplate="<b>%{label} Tier</b><br>Customers: %{value:,}<br>Portfolio Share: %{percent}<extra></extra>",
+                    textfont=dict(size=12, color="#FFFFFF"),
+                    sort=False,
+                )
+            ]
+        )
+        fig_share.add_annotation(
+            text=f"<b>{total_customers:,}</b><br><span style='font-size:11px;color:#667085;'>Total</span>",
+            x=0.5,
+            y=0.5,
+            font=dict(size=18, color=TEXT_PRIMARY, family="Inter, sans-serif"),
+            showarrow=False,
+        )
+        apply_plotly_theme(fig_share, height=340, title="Customer Share by Risk Tier")
+        st.plotly_chart(fig_share, width="stretch")
+        st.caption("High-risk customers represent nearly one-third of the portfolio, requiring prioritized intervention.")
+
+    # 3. Dynamic Business Insights Generated from Live Data
+    st.markdown(
+        """
+        <div style="margin-top: 1.5rem; margin-bottom: 0.75rem;">
+            <h3 style="font-size: 1.15rem; font-weight: 700; color: #101828; margin: 0;">Risk Tier Empirical Insights</h3>
+            <p style="font-size: 0.825rem; color: #667085; margin: 0.15rem 0 0 0;">Observed behavioral profiles and contrast between risk cohorts</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    low_row = tier_df[tier_df["risk_tier"] == "Low"].iloc[0]
+    med_row = tier_df[tier_df["risk_tier"] == "Medium"].iloc[0]
+    high_row = tier_df[tier_df["risk_tier"] == "High"].iloc[0]
+
+    high_mult = high_row["actual_churn_rate"] / low_row["actual_churn_rate"] if low_row["actual_churn_rate"] > 0 else 0
+    tenure_ratio = low_row["average_tenure"] / high_row["average_tenure"] if high_row["average_tenure"] > 0 else 0
+
+    ins_cols = st.columns(3)
+    with ins_cols[0]:
+        render_insight_card(
+            title="Tier Stratification Efficacy",
+            body=f"Observed churn rises from <strong>{low_row['actual_churn_rate']:.1f}%</strong> in the Low tier to <strong>{high_row['actual_churn_rate']:.1f}%</strong> in the High tier (a <strong>{high_mult:.1f}x spread</strong>), validating model ranking power.",
+        )
+    with ins_cols[1]:
+        render_insight_card(
+            title="Tenure Disparity",
+            body=f"Low-tier customers average <strong>{low_row['average_tenure']:.1f} months</strong> of tenure ({tenure_ratio:.1f}x longer), whereas High-risk accounts average only <strong>{high_row['average_tenure']:.1f} months</strong>.",
+        )
+    with ins_cols[2]:
+        render_insight_card(
+            title="High-Risk Cohort Profile",
+            body=f"High-risk customers most commonly have <strong>{high_row['common_contract']}</strong> contracts, use <strong>{high_row['common_internet_service']}</strong>, and pay via <strong>{high_row['common_payment_method']}</strong> with ${high_row['average_monthly_charges']:.1f} avg charges.",
+        )
+
+    # 4. Tier Profile Summary Table
+    st.markdown(
+        """
+        <div style="margin-top: 1.75rem; margin-bottom: 0.75rem;">
+            <h3 style="font-size: 1.15rem; font-weight: 700; color: #101828; margin: 0;">Comprehensive Risk Tier Profiles</h3>
+            <p style="font-size: 0.825rem; color: #667085; margin: 0.15rem 0 0 0;">Attribute averages and most frequent configurations per segment</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     tier_display = tier_summary.rename(columns={
         "risk_tier": "Risk tier",
@@ -403,36 +757,9 @@ def render_risk_segments(tier_summary: pd.DataFrame) -> None:
     tier_display["Avg tenure (months)"] = tier_display["Avg tenure (months)"].round(1)
     tier_display["Avg monthly charges ($)"] = tier_display["Avg monthly charges ($)"].round(1)
 
-    left, right = st.columns(2)
-    with left:
-        fig_cust = px.bar(
-            tier_display,
-            x="Risk tier",
-            y="Customers",
-            color="Risk tier",
-            title="Customers by Risk Tier",
-            labels={"Customers": "Customers", "Risk tier": "Risk tier"},
-            color_discrete_map=TIER_COLORS,
-            category_orders={"Risk tier": ["Low", "Medium", "High"]},
-        )
-        apply_plotly_theme(fig_cust, height=340, title="Customers by Risk Tier")
-        left.plotly_chart(fig_cust, width="stretch")
-    with right:
-        fig_rate = px.bar(
-            tier_display,
-            x="Risk tier",
-            y="Actual churn rate (%)",
-            color="Risk tier",
-            title="Observed Churn Rate by Risk Tier",
-            labels={"Actual churn rate (%)": "Actual churn rate (%)", "Risk tier": "Risk tier"},
-            color_discrete_map=TIER_COLORS,
-            category_orders={"Risk tier": ["Low", "Medium", "High"]},
-            text_auto=".1f",
-        )
-        apply_plotly_theme(fig_rate, height=340, title="Observed Churn Rate by Risk Tier")
-        right.plotly_chart(fig_rate, width="stretch")
-
     st.dataframe(tier_display, width="stretch", hide_index=True)
+    st.caption("Risk score is produced by a class-weighted model and ranks customers for review; it is not a calibrated probability.")
+    st.caption("Privacy note: this dashboard shows customer IDs from a public demonstration dataset only.")
 
 
 def render_high_risk_customers(customers: pd.DataFrame, risk_scores: pd.DataFrame) -> None:
