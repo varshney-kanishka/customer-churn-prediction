@@ -14,15 +14,15 @@ def render_page_header(
     db_path: Path,
     is_loaded: bool = True,
 ) -> None:
-    """Render the standard top header on every page with status and refresh."""
+    """Render the standard top header on every page with compact aligned status and refresh."""
     header_col, meta_col = st.columns([3, 2], vertical_alignment="center")
 
     with header_col:
         st.markdown(
             f"""
             <div>
-                <h1 style="font-size: 1.85rem; font-weight: 700; color: #101828; margin: 0; letter-spacing: -0.02em;">{title}</h1>
-                <p style="font-size: 0.9rem; color: #667085; margin: 0.25rem 0 0 0;">Predict, analyze and reduce customer churn.</p>
+                <h1 style="font-size: 1.55rem; font-weight: 700; color: #0F172A; margin: 0; letter-spacing: -0.02em;">{title}</h1>
+                <p style="font-size: 0.825rem; color: #64748B; margin: 0.2rem 0 0 0;">Predict, analyze and reduce customer churn.</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -30,33 +30,33 @@ def render_page_header(
 
     with meta_col:
         status_html = (
-            '<span class="status-pill status-pill-green"><span class="status-dot status-dot-green"></span>Data loaded</span>'
+            '<span class="status-pill status-pill-green"><span class="status-dot status-dot-green"></span>Active</span>'
             if is_loaded
-            else '<span class="status-pill status-pill-red"><span class="status-dot status-dot-red"></span>Database offline</span>'
+            else '<span class="status-pill status-pill-red"><span class="status-dot status-dot-red"></span>Offline</span>'
         )
 
         db_time_str = "Unavailable"
         if db_path.exists():
             mod_time = datetime.datetime.fromtimestamp(db_path.stat().st_mtime)
-            db_time_str = mod_time.strftime("%b %d, %Y %H:%M")
+            db_time_str = mod_time.strftime("%b %d, %H:%M")
 
-        pill_col, btn_col = st.columns([3, 1], vertical_alignment="center")
+        pill_col, btn_col = st.columns([4, 1], vertical_alignment="center")
         with pill_col:
             st.markdown(
                 f"""
-                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem;">
-                    <div>{status_html}</div>
-                    <span class="db-timestamp">Database built: {db_time_str}</span>
+                <div style="display: flex; align-items: center; justify-content: flex-end; gap: 0.65rem;">
+                    {status_html}
+                    <span class="db-timestamp" style="white-space: nowrap;">Database built: {db_time_str}</span>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
         with btn_col:
-            if st.button("Refresh", key="hdr_refresh_btn", help="Clear cached database tables and reload"):
+            if st.button("Refresh", key="hdr_refresh_btn", help="Clear cached database tables and reload", use_container_width=True):
                 st.cache_data.clear()
                 st.rerun()
 
-    st.markdown("<div style='margin-bottom: 1.25rem;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
 
 
 def render_kpi_card(
@@ -64,7 +64,7 @@ def render_kpi_card(
     value: str,
     caption: str,
 ) -> None:
-    """Render a single styled metric card."""
+    """Render a single styled metric card with clear hierarchy."""
     st.markdown(
         f"""
         <div class="kpi-card">
@@ -95,7 +95,7 @@ def render_kpi_row(customers: pd.DataFrame) -> None:
         render_kpi_card(
             label="Total customers",
             value=f"{total_customers:,}",
-            caption="Active accounts",
+            caption="Customers in dataset",
         )
     with cols[1]:
         render_kpi_card(
@@ -123,14 +123,14 @@ def render_kpi_row(customers: pd.DataFrame) -> None:
         )
 
     # Secondary strip for MRC impact
-    st.markdown("<div style='margin-top: 0.75rem;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-top: 0.65rem;'></div>", unsafe_allow_html=True)
     mrc_cols = st.columns(3)
     with mrc_cols[0]:
         st.markdown(
             f"""
-            <div style="background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 8px; padding: 0.6rem 1rem; display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 0.8rem; font-weight: 500; color: #667085;">Total Portfolio MRC</span>
-                <span style="font-size: 0.95rem; font-weight: 700; color: #101828;">${total_mrc:,.0f}</span>
+            <div style="background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 10px; padding: 0.55rem 0.9rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);">
+                <span style="font-size: 0.78rem; font-weight: 500; color: #64748B;">Total Portfolio MRC</span>
+                <span style="font-size: 0.95rem; font-weight: 700; color: #0F172A;">${total_mrc:,.0f}</span>
             </div>
             """,
             unsafe_allow_html=True,
@@ -138,8 +138,8 @@ def render_kpi_row(customers: pd.DataFrame) -> None:
     with mrc_cols[1]:
         st.markdown(
             f"""
-            <div style="background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 8px; padding: 0.6rem 1rem; display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 0.8rem; font-weight: 500; color: #667085;">Churned Customer MRC</span>
+            <div style="background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 10px; padding: 0.55rem 0.9rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);">
+                <span style="font-size: 0.78rem; font-weight: 500; color: #64748B;">Churned Customer MRC</span>
                 <span style="font-size: 0.95rem; font-weight: 700; color: #DC2626;">${churned_mrc:,.0f}</span>
             </div>
             """,
@@ -148,14 +148,14 @@ def render_kpi_row(customers: pd.DataFrame) -> None:
     with mrc_cols[2]:
         st.markdown(
             f"""
-            <div style="background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 8px; padding: 0.6rem 1rem; display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 0.8rem; font-weight: 500; color: #667085;">Churned MRC Share</span>
+            <div style="background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 10px; padding: 0.55rem 0.9rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);">
+                <span style="font-size: 0.78rem; font-weight: 500; color: #64748B;">Churned MRC Share</span>
                 <span style="font-size: 0.95rem; font-weight: 700; color: #DC2626;">{churned_mrc_pct:.1f}%</span>
             </div>
             """,
             unsafe_allow_html=True,
         )
-    st.markdown("<div style='margin-bottom: 1.25rem;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-bottom: 1.15rem;'></div>", unsafe_allow_html=True)
 
 
 def render_tier_card(
@@ -168,19 +168,29 @@ def render_tier_card(
     avg_mrc: float,
 ) -> None:
     """Render a dedicated metric card for a risk tier."""
+    pill_class = f"tier-pill-{tier.lower()}"
+    dot_class = "status-dot-green" if tier == "Low" else ("status-dot-red" if tier == "High" else "")
+    dot_style = "background-color: #F59E0B;" if tier == "Medium" else ""
+
+    dot_html = (
+        f'<span class="status-dot {dot_class}"></span>'
+        if dot_class
+        else f'<span class="status-dot" style="{dot_style}"></span>'
+    )
+
     st.markdown(
         f"""
-        <div style="background: #FFFFFF; border: 1px solid #E5E7EB; border-top: 4px solid {color}; border-radius: 12px; padding: 1.25rem; box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05); min-height: 145px; display: flex; flex-direction: column; justify-content: space-between;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                <span style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: {color};">{tier} Risk Tier</span>
-                <span style="background: #F1F5F9; color: #475467; font-size: 0.75rem; font-weight: 600; padding: 0.2rem 0.5rem; border-radius: 9999px;">{share:.1f}% of base</span>
+        <div style="background: #FFFFFF; border: 1px solid #E5E7EB; border-top: 3px solid {color}; border-radius: 12px; padding: 1.15rem 1.25rem; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03); min-height: 138px; display: flex; flex-direction: column; justify-content: space-between;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                <span class="tier-pill {pill_class}">{dot_html}{tier} Risk Tier</span>
+                <span style="font-size: 0.75rem; font-weight: 500; color: #64748B;">{share:.1f}% share</span>
             </div>
             <div>
-                <div style="font-size: 1.85rem; font-weight: 700; color: #101828; line-height: 1.1;">{customers:,}</div>
-                <div style="font-size: 0.8rem; color: #667085; margin-top: 0.25rem;">Customers &bull; Avg ${avg_mrc:,.1f}/mo</div>
+                <div style="font-size: 1.75rem; font-weight: 700; color: #0F172A; line-height: 1.15;">{customers:,}</div>
+                <div style="font-size: 0.78rem; color: #64748B; margin-top: 0.2rem;">Avg tenure {avg_tenure:.1f} mo &bull; Avg ${avg_mrc:,.1f}/mo</div>
             </div>
-            <div style="margin-top: 0.75rem; padding-top: 0.65rem; border-top: 1px solid #F1F5F9; display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 0.8rem; color: #667085;">Observed Churn Rate</span>
+            <div style="margin-top: 0.65rem; padding-top: 0.55rem; border-top: 1px solid #F1F5F9; display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.78rem; color: #64748B;">Observed Churn Rate</span>
                 <span style="font-size: 0.95rem; font-weight: 700; color: {color};">{churn_rate:.1f}%</span>
             </div>
         </div>
